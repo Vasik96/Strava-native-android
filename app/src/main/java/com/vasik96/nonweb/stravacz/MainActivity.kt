@@ -37,7 +37,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.NoMeals
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Lock
@@ -46,7 +53,6 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Savings
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -75,6 +81,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -100,6 +107,9 @@ import com.vasik96.nonweb.stravacz.data.MenuDay
 import com.vasik96.nonweb.stravacz.data.StravaRepository
 import com.vasik96.nonweb.stravacz.ui.theme.StravaTheme
 import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.DayOfWeek
+import java.time.temporal.TemporalAdjusters
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -800,22 +810,29 @@ private fun MenuScreen(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
-    var selectedDate by remember {
-        mutableStateOf<String?>(null)
+    val currentWeekStart = remember {
+        LocalDate.now().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
     }
 
-    LaunchedEffect(visibleDays) {
-        if (visibleDays.isNotEmpty()) {
-            selectedDate = selectedDate
-                ?.takeIf { date ->
-                    visibleDays.any {
-                        it.date.toString() == date
-                    }
-                }
-                ?: visibleDays.first().date.toString()
-        } else {
-            selectedDate = null
+    val nextWeekFirstDayIndex = remember(visibleDays, currentWeekStart) {
+        visibleDays.indexOfFirst { day ->
+            val dayWeekStart = day.date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+            dayWeekStart > currentWeekStart
         }
+    }
+
+    val hasNextWeek = nextWeekFirstDayIndex >= 0
+    val extraHeaderCount = 1 + if (error != null) 1 else 0
+    val nextWeekItemIndex = if (hasNextWeek) nextWeekFirstDayIndex + extraHeaderCount else Int.MAX_VALUE
+
+    // Tlačítko "Tento týden" je aktivní, pokud jsme odskrolovaní dolů z úplného vrcholu
+    val isTentoTydenEnabled by remember(listState) {
+        derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0 }
+    }
+
+    // Tlačítko "Další týden" je aktivní, pokud existuje další týden a ještě k němu nejsme odskrolovaní
+    val isDalsiTydenEnabled by remember(listState, hasNextWeek, nextWeekItemIndex) {
+        derivedStateOf { hasNextWeek && listState.firstVisibleItemIndex < nextWeekItemIndex }
     }
 
     LaunchedEffect(message) {
@@ -844,55 +861,39 @@ private fun MenuScreen(
                 .fillMaxSize()
                 .padding(inner)
         ) {
-            // Výběr data hned pod horní lištou.
+            // Přepínání jídelníčků po týdnech.
             if (visibleDays.isNotEmpty()) {
-                LazyRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentPadding = PaddingValues(
-                        horizontal = 16.dp,
-                        vertical = 24.dp
-                    ),
-                    horizontalArrangement =
-                        Arrangement.spacedBy(8.dp)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    items(
-                        items = visibleDays,
-                        key = { day -> "date-${day.date}" }
-                    ) { day ->
-                        val dateKey = day.date.toString()
-                        val isSelected = selectedDate == dateKey
+                    OutlinedButton(
+                        onClick = {
+                            scope.launch { listState.animateScrollToItem(0) }
+                        },
+                        enabled = isTentoTydenEnabled,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Tento týden")
+                    }
 
-                        FilterChip(
-                            selected = isSelected,
-                            onClick = {
-                                selectedDate = dateKey
-
-                                val dayIndex =
-                                    visibleDays.indexOfFirst {
-                                        it.date == day.date
-                                    }
-
-                                if (dayIndex >= 0) {
-                                    val extraItems =
-                                        1 + if (error != null) 1 else 0
-
-                                    scope.launch {
-                                        listState.animateScrollToItem(
-                                            dayIndex + extraItems
-                                        )
-                                    }
-                                }
-                            },
-                            label = {
-                                Text(
-                                    day.date
-                                        .format(dateFormatter)
-                                        .replaceFirstChar {
-                                            it.uppercase(CS)
-                                        }
-                                )
+                    Button(
+                        onClick = {
+                            if (hasNextWeek) {
+                                scope.launch { listState.animateScrollToItem(nextWeekItemIndex) }
                             }
-                        )
+                        },
+                        enabled = isDalsiTydenEnabled,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Další týden")
+                        Spacer(Modifier.width(6.dp))
+                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
                     }
                 }
             }
@@ -1137,7 +1138,7 @@ private fun DayCard(
 
                 Spacer(Modifier.width(10.dp))
 
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = dateLabel,
                         style = MaterialTheme.typography.titleLarge,
@@ -1161,6 +1162,38 @@ private fun DayCard(
                         )
                     }
                 }
+
+                val selectedDayMeals = groups.mapNotNull { (type, meals) ->
+                    val key = "${day.date}|$type"
+                    if (selection.values[key] == null) null
+                    else meals.firstOrNull { it.ordered }
+                }
+                // Ikona je aktivní jen tehdy, když lze zrušit všechny vybrané obědy dne.
+                val canCancelDay = selectedDayMeals.isNotEmpty() &&
+                        selectedDayMeals.all { orderedMeal ->
+                            orderedMeal == null || orderedMeal.canCancel
+                        }
+                IconButton(
+                    onClick = {
+                        groups.forEach { (type, meals) ->
+                            val orderedMeal = meals.firstOrNull { it.ordered }
+                            val key = "${day.date}|$type"
+                            if (selection.values[key] != null &&
+                                (orderedMeal == null || orderedMeal.canCancel)
+                            ) {
+                                onSelect(key, null)
+                            }
+                        }
+                    },
+                    enabled = canCancelDay
+                ) {
+                    Icon(
+                        Icons.Default.NoMeals,
+                        contentDescription = "Zrušit všechny objednávky tohoto dne",
+                        tint = if (canCancelDay) MaterialTheme.colorScheme.error
+                        else Color.LightGray.copy(alpha = 0.35f)
+                    )
+                }
             }
 
             // Polévky
@@ -1170,7 +1203,7 @@ private fun DayCard(
                         imageVector = if (hasLunch) {
                             Icons.Default.CheckCircle
                         } else {
-                            Icons.Default.Warning
+                            Icons.Default.Close
                         },
                         contentDescription = null,
                         tint = if (hasLunch) {
@@ -1182,7 +1215,7 @@ private fun DayCard(
 
                     Spacer(Modifier.width(8.dp))
 
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(soup.name)
 
                         Text(
@@ -1193,6 +1226,13 @@ private fun DayCard(
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    IconButton(onClick = { imageQuery = "Polévka ${soup.name}" }) {
+                        Icon(
+                            Icons.Default.Image,
+                            contentDescription = "Zobrazit obrázky polévky ${soup.name}"
                         )
                     }
                 }
@@ -1225,7 +1265,7 @@ private fun DayCard(
                             selected = current == meal.id,
                             onClick = {
                                 if (enabled) {
-                                    onSelect(key, meal.id)
+                                    onSelect(key, if (current == meal.id) null else meal.id)
                                 }
                             },
                             enabled = enabled
@@ -1235,7 +1275,7 @@ private fun DayCard(
                             modifier = Modifier
                                 .weight(1f)
                                 .clickable(enabled = enabled) {
-                                    onSelect(key, meal.id)
+                                    onSelect(key, if (current == meal.id) null else meal.id)
                                 }
                                 .padding(vertical = 6.dp)
                         ) {
@@ -1267,49 +1307,15 @@ private fun DayCard(
                             )
                         }
 
-                        TextButton(
-                            onClick = {
-                                imageQuery = meal.name
-                            }
+                        IconButton(
+                            onClick = { imageQuery = meal.name }
                         ) {
-                            Text("Obrázky")
+                            Icon(
+                                Icons.Default.Image,
+                                contentDescription = "Zobrazit obrázky jídla ${meal.name}"
+                            )
                         }
-                    }
-                }
 
-                // Možnost zrušit oběd
-                val noneEnabled = canChange &&
-                        (ordered != null || meals.any { it.canOrder })
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    RadioButton(
-                        selected = current == null,
-                        onClick = {
-                            if (noneEnabled) {
-                                onSelect(key, null)
-                            }
-                        },
-                        enabled = noneEnabled
-                    )
-
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable(enabled = noneEnabled) {
-                                onSelect(key, null)
-                            }
-                            .padding(vertical = 6.dp)
-                    ) {
-                        Text("Neobjednávat")
-
-                        Text(
-                            text = "Bez obědu",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                     }
                 }
             }
