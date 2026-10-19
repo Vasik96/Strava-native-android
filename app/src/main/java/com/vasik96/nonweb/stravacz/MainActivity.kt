@@ -9,7 +9,25 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import android.Manifest
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import com.vasik96.nonweb.stravacz.data.OrderStateStore
+import com.vasik96.nonweb.stravacz.worker.OrderCheckWorker
+import java.util.concurrent.TimeUnit
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -118,7 +136,10 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items as lazyRowItems
 import androidx.compose.material3.FilterChip
 import androidx.compose.runtime.snapshotFlow
+import androidx.core.app.NotificationCompat
+import androidx.work.OneTimeWorkRequestBuilder
 import kotlinx.coroutines.flow.collect
+import androidx.compose.material3.LinearWavyProgressIndicator
 
 
 // Formattery a locale se vytvoří jen jednou (dřív se vytvářely při každé rekompozici = lagy).
@@ -136,7 +157,6 @@ private data class DaySelection(val values: Map<String, String?>)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
@@ -155,6 +175,9 @@ private fun StravaApp() {
     val repository = remember { StravaRepository() }
     val credentialStore = remember {
         CredentialStore(context.applicationContext)
+    }
+    val orderStateStore = remember {
+        OrderStateStore(context.applicationContext)
     }
     val scope = rememberCoroutineScope()
 
@@ -209,6 +232,62 @@ private fun StravaApp() {
             }
         }
 
+    fun formatChangeNotificationDesc(key: String, currentMealId: String?): String {
+        val dateStr = key.substringBefore('|')
+        val formattedDate = try {
+            LocalDate.parse(dateStr)
+                .format(DateTimeFormatter.ofPattern("EEEE d. M.", CS))
+                .replaceFirstChar { it.uppercase(CS) }
+        } catch (_: Exception) {
+            dateStr
+        }
+
+        return if (currentMealId == null) {
+            "Zaznamenáno odhlášení oběda na $formattedDate (mimo aplikaci)"
+        } else {
+            "Zaznamenána změna oběda na $formattedDate (mimo aplikaci)"
+        }
+    }
+
+    fun sendExternalNotification(ctx: Context, title: String, message: String) {
+        val notificationManager =
+            ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        val channelId = "strava_order_changes"
+        val channel = NotificationChannel(
+            channelId,
+            "Změny objednávek Strava.cz",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Upozornění při změně obědu jídelnou nebo z jiného zařízení."
+            enableVibration(true)
+        }
+        notificationManager.createNotificationChannel(channel)
+
+        val intent = Intent(ctx, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+
+        val pendingIntent = PendingIntent.getActivity(
+            ctx,
+            0,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(ctx, channelId)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .build()
+
+        notificationManager.notify(1001, notification)
+    }
+
     fun refreshMenu() {
         scope.launch {
             loading = true
@@ -221,6 +300,28 @@ private fun StravaApp() {
                 val state = selectionState(result)
                 selected = state
                 original = state
+
+                val previousState = orderStateStore.loadState()
+                if (previousState.isNotEmpty()) {
+                    val externalChanges = mutableListOf<String>()
+                    val allKeys = previousState.keys.union(state.keys)
+
+                    allKeys.forEach { key ->
+                        val previousMealId = previousState[key]
+                        val currentMealId = state[key]
+                        if (previousMealId != currentMealId) {
+                            externalChanges.add(formatChangeNotificationDesc(key, currentMealId))
+                        }
+                    }
+
+                    if (externalChanges.isNotEmpty()) {
+                        val notifText = externalChanges.joinToString("\n")
+                        message = "Změna v jídelníčku:\n$notifText"
+                        sendExternalNotification(context, "Změna v jídelníčku!", notifText)
+                    }
+                }
+
+                orderStateStore.saveState(state)
 
                 balance = repository.balance
 
@@ -273,7 +374,41 @@ private fun StravaApp() {
         }
     }
 
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { }
+
     LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+
+        val workRequest = PeriodicWorkRequestBuilder<OrderCheckWorker>(30, TimeUnit.MINUTES)
+            .setConstraints(constraints)
+            .build()
+
+        WorkManager.getInstance(context.applicationContext).enqueueUniquePeriodicWork(
+            "OrderCheckWorker",
+            ExistingPeriodicWorkPolicy.KEEP,
+            workRequest
+        )
+
+        val immediateWorkRequest = OneTimeWorkRequestBuilder<OrderCheckWorker>()
+            .setConstraints(constraints)
+            .build()
+
+        WorkManager.getInstance(context.applicationContext).enqueue(immediateWorkRequest)
+
         val saved = credentialStore.load()
 
         if (saved != null) {
@@ -410,6 +545,7 @@ private fun StravaApp() {
 
                                         selected = state
                                         original = state
+                                        orderStateStore.saveState(state)
                                         balance = repository.balance
                                         userName = repository.userName
                                     } catch (e: Exception) {
@@ -774,7 +910,7 @@ private fun LoginScreen(
 }
 
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun MenuScreen(
     days: List<MenuDay>,
@@ -1030,10 +1166,18 @@ private fun MenuScreen(
                 }
 
                 if (loading) {
-                    LinearProgressIndicator(
+                    val thickness = with(LocalDensity.current) { 8.dp.toPx() }
+                    val stroke = Stroke(width = thickness, cap = StrokeCap.Round)
+
+                    LinearWavyProgressIndicator(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .align(Alignment.TopCenter)
+                            .height(16.dp)
+                            .align(Alignment.TopCenter),
+                        stroke = stroke,
+                        trackStroke = stroke,
+                        amplitude = 0.7f,
+                        wavelength = 40.dp
                     )
                 }
             }
