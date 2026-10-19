@@ -1,6 +1,7 @@
 # 🍽️ Strava.cz Native Android App
 
-Nativní Android aplikace vytvořená pro snadný přístup k objednávkovému systému školního stravování **[Strava.cz](https://www.strava.cz)**. Aplikace umožňuje uživatelům pohodlně spravovat své jídelníčky, přihlašovat a odhlašovat obědy a sledovat stav stravovacího účtu. ###**(hele něco z tohohle README napsal AI takže něco z toho není pravda)**
+Nativní Android aplikace vytvořená pro snadný přístup k objednávkovému systému školního stravování **[Strava.cz](https://www.strava.cz)**. Aplikace umožňuje uživatelům pohodlně spravovat své jídelníčky, přihlašovat a odhlašovat obědy a sledovat stav stravovacího účtu.
+###**(Něco z tohohle README napsal AI takže něco z toho není pravda)**
 
 ## 🚀 Hlavní Funkce
 
