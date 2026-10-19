@@ -1,118 +1,79 @@
-# 🏃‍♂️ Strava Native Android App
+# 🍽️ Strava.cz Native Android App
 
-Nativní Android aplikace vytvořená pomocí moderních postupů pro vývoj na platformě Android, která komunikuje s rozhraním **Strava v3 API**. Aplikace umožňuje uživatelům přihlášení přes OAuth2, prohlížení profilu sportovce, procházení seznamu aktivit, detailní sledování statistik a analýzu výikonu.
+Nativní Android aplikace vytvořená pro snadný přístup k objednávkovému systému školního a závodního stravování **[Strava.cz](https://www.strava.cz)**. Aplikace umožňuje uživatelům (žákům, rodičům i zaměstnancům) pohodlně spravovat své jídelníčky, přihlašovat a odhlašovat obědy a sledovat stav stravovacího účtu.
 
 ## 🚀 Hlavní Funkce
 
-* **🔐 Autentizace přes OAuth 2.0**: Bezpečné přihlášení a autorizace pomocí rozhraní Strava API.
-
-* **📊 Přehled Aktivit**: Zobrazení nedávných aktivit včetně vzdálenosti, času, převýšení a průměrné rychlosti či tempa.
-
-* **👤 Profil Sportovce**: Zobrazení detailů uživatele, celkových statistik a dosažených úspěchů.
-
-* **🗺️ Detail Aktivity**: Podrobný rozbor jednotlivých tréninků včetně mapy trasy, výškového profilu a dat o tepové frekvenci (pokud jsou k dispozici).
-
-* **🌗 Čisté UI / UX**: Moderní vzhled podle standardů Material Design 3 s plynulými interakcemi a přizpůsobitelným rozvržením.
+* **🔐 Přihlášení k jídelně**: Bezpečné přihlášení pomocí čísla zařízení/jídelny, uživatelského jména a hesla.
+* **📅 Prohlížení Jídelníčku**: Přehledný týdenní a měsíční rozpis jídel včetně alergenů, gramáže a nutričních hodnot.
+* **🍱 Objednávání a Odhlašování Stravy**: Rychlá volba z nabízených druhů jídel (Oběd 1, Oběd 2, Svačina atd.) a možnost odhlášení na konkrétní dny.
+* **💰 Stav Účtu**: Zobrazení aktuálního kreditu.
+* **🔔 Upozornění**: Notifikace když někdo změní oběd mimo aplikaci.
 
 ## 🛠️ Použité Technologie a Architektura
 
-Aplikace je postavena na moderních architektonických vzorech pro Android a doporučených knihovnách ze sady Android Jetpack:
+Aplikace využívá moderní přístupy k vývoji nativních aplikací pro Android:
 
 * **Jazyk**: [Kotlin](https://kotlinlang.org/)
+* **Architektura**: MVVM (Model-View-ViewModel) / MVI
+* **Uživatelské rozhraní (UI)**: [Jetpack Compose](https://developer.android.com/jetpack/compose) s Material Design 3
+* **Asynchronní operace**: Kotlin Coroutines & `StateFlow`
+* **Síťová komunikace**: [Retrofit 2](https://square.github.io/retrofit/) + [Ktor Client](https://ktor.io/) / [Moshi](https://github.com/square/moshi) pro parsing dat
+* **Web Scraping / API**: Zpracování a parsing odpovědí ze servery Strava.cz (HTML/JSON)
+* **Dependency Injection**: [Hilt](https://dagger.dev/hilt/)
+* **Lokální cache**: [Room Database](https://developer.android.com/training/data-storage/room) & `EncryptedSharedPreferences` pro bezpečné uložení přihlašovacích údajů
 
-* **Architektura**: MVVM (Model-View-ViewModel) + principy Clean Architecture
+## ⚙️ Instalace a Spuštění
 
-* **Uživatelské rozhraní (UI)**: Jetpack Compose / ViewBinding & XML
-
-* **Asynchronní operace**: Kotlin Coroutines & `StateFlow` / `LiveData`
-
-* **Síťová komunikace**: [Retrofit 2](https://square.github.io/retrofit/) + [Moshi](https://github.com/square/moshi) / [Gson](https://github.com/google/gson)
-
-* **Dependency Injection**: [Hilt](https://dagger.dev/hilt/) / [Koin](https://insert-koin.io/)
-
-* **Načítání obrázků**: [Coil](https://github.com/coil-kt/coil) / [Glide](https://github.com/bumptech/glide)
-
-* **Lokální úložiště / Cache**: [Room Database](https://developer.android.com/training/data-storage/room) & `EncryptedSharedPreferences` / DataStore
-
-## ⚙️ Instalace a Nastavení
-
-Pro lokální spuštění projektu budete potřebovat **Účet vývojáře na Stravě (Strava Developer Account)** pro registraci aplikace a získání API klíčů.
-
-### 1. Požadavky
-
-* Android Studio Hedgehog (nebo novější)
-
+### Požadavky
+* Android Studio Ladybug / Hedgehog (nebo novější)
 * JDK 17
+* Android SDK (min. API level 24 – Android 7.0)
 
-* Android SDK s minimální verzí API 24 (Android 7.0)
+### Postup
 
-### 2. Registrace Strava API
+1. **Klonování repozitáře**:
+   ```bash
+   git clone https://github.com/Vasik96/Strava-native-android.git
+   cd Strava-native-android
+   ```
 
-1. Přihlaste se ke svému účtu Strava a přejděte do [Nastavení Strava API](https://www.strava.com/settings/api).
+2. **Otevření v Android Studiu**:
+   * Otevřete Android Studio a zvolte *Open File or Project*.
+   * Vyberte složku s klonovaným projektem.
 
-2. Zaregistrujte novou aplikaci:
-
-   * **Název aplikace (Application Name)**: `Strava Native Android (Dev)`
-
-   * **Kategorie (Category)**: `App` nebo `Visualizer`
-
-   * **Autorizační callback doména (Authorization Callback Domain)**: `localhost` (nebo vlastní deep-link doména aplikace, např. `stravanative://redirect`)
-
-3. Poznamenejte si vaše **Client ID** a **Client Secret**.
-
-### 3. Klonování a Konfigurace Projektu
-
-Klonujte repozitář:
-
-```bash
-git clone https://github.com/Vasik96/Strava-native-android.git
-cd Strava-native-android
-```
-
-Přidejte vaše API údaje do souboru `local.properties` (který se nachází v kořenové složce projektu):
-
-```properties
-STRAVA_CLIENT_ID="VASE_CLIENT_ID"
-STRAVA_CLIENT_SECRET="VAS_CLIENT_SECRET"
-STRAVA_REDIRECT_URI="stravanative://redirect"
-```
-
-*Poznámka: Ujistěte se, že je soubor `local.properties` uveden v `.gitignore`, aby nedošlo ke commitnutí vašich tajných klíčů do repozitáře.*
+3. **Sestavení a spuštění**:
+   * Počkejte na dokončení synchronizace Gradle.
+   * Připojte fyzické zařízení s povoleným vývojářským režimem nebo spusťte Android Emulator.
+   * Stiskněte tlačítko **Run** (`Shift + F10`).
 
 ## 📱 Snímky obrazovky (Screenshots)
 
-| Přihlášení / OAuth | Přehled aktivit | Detail aktivity | Profil | 
-| ----- | ----- | ----- | ----- | 
-| *Doplnit obrázek* | *Doplnit obrázek* | *Doplnit obrázek* | *Doplnit obrázek* | 
+| Přihlášení | Jídelníček & Objednávky | Detail jídla | Stav účtu |
+| :-: | :-: | :-: | :-: |
+| *Doplnit obrázek* | *Doplnit obrázek* | *Doplnit obrázek* | *Doplnit obrázek* |
 
-## 🧪 Spuštění Testů
+## 🧪 Testování
 
-Spuštění jednotkových testů (Unit tests):
-
+Spuštění jednotkových testů:
 ```bash
 ./gradlew test
 ```
 
-Spuštění UI / Instrumentovaných testů:
-
+Spuštění instrumentovaných UI testů:
 ```bash
 ./gradlew connectedAndroidTest
 ```
 
 ## 🤝 Příspěvky do projektu (Contributing)
 
-Příspěvky, nahlášení chyb i návrhy na nové funkce jsou vítány!
-
-1. Vytvořte Fork projektu
-
-2. Vytvořte svou větev s funkcí (`git checkout -b feature/NovaFunkce`)
-
-3. Uložte změny (`git commit -m 'Přidána nová funkce'`)
-
-4. Odeslete změny do větve (`git checkout -b feature/NovaFunkce`)
-
-5. Otevřete Pull Request
+Pokud chcete do projektu přispět:
+1. Vytvořte Fork projektu.
+2. Vytvořte svou větev (`git checkout -b feature/NovaFunkce`).
+3. Uložte změny (`git commit -m 'Přidána nová funkce'`).
+4. Odeslete změny (`git push origin feature/NovaFunkce`).
+5. Otevřete Pull Request.
 
 ## 📄 Licence
 
-Projekt je distribuován pod licencí MIT. Více informací naleznete v souboru `LICENSE`.
+Tento projekt je šířen pod licencí MIT. Podrobnosti najdete v souboru `LICENSE`.
