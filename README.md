@@ -78,4 +78,4 @@ Pokud chcete do projektu přispět:
 
 ## 📄 Licence
 
-Tento projekt je šířen pod licencí MIT. Podrobnosti najdete v souboru `LICENSE`.
+Žádná neni, dělejte si s tim co chcete.
