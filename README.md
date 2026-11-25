@@ -77,5 +77,4 @@ Pokud chcete do projektu přispět:
 5. Otevřete Pull Request.
 
 ## 📄 Licence
-
-Žádná neni, dělejte si s tim co chcete.
+MIT
